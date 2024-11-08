@@ -1,6 +1,7 @@
 import { Route, Routes, Link } from "react-router-dom";
 
 import Circle from "components/Circle";
+import Line from "components/Line";
 
 function App() {
   return (
@@ -11,6 +12,7 @@ function App() {
       </nav>
       <Routes>
         <Route path="/circle" element={<Circle />} />
+        <Route path="/line" element={<Line />} />
       </Routes>
     </div>
   );
