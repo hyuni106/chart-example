@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useImmer } from "use-immer";
 import { useSpring, animated } from "react-spring";
 
 const DEFAULT_FILL_COLOR = "rgba(104, 204, 202, 0.3)";
@@ -38,7 +37,7 @@ const LineChart = (props: LineChartProps) => {
     paddingRight = 20,
   } = props;
 
-  const [state, setState] = useImmer<LineChartState>({
+  const [state, setState] = useState<LineChartState>({
     minValue: 0,
     maxValue: 100,
     stepX: 0,
@@ -65,31 +64,28 @@ const LineChart = (props: LineChartProps) => {
   }, [state.chartValueArray]);
 
   const makeLineChart = useCallback(() => {
-    const minValue = 0;
-    const maxValue = 100;
     const horizontalLines: number[] = [];
-
-    const variation = Math.abs(maxValue - minValue);
-    const axisHStep = maxValue / 5;
-    for (let i = 0; i < 5; i++) {
-      horizontalLines.push(axisHStep * i);
-    }
-
     const stepX = (width - (paddingLeft + paddingRight)) / maxXAxisValue;
-    const stepY = (height - paddingTop) / variation;
+    const stepY = (height - paddingTop) / (state.maxValue - state.minValue);
 
     const values = valueArray.map((item) =>
       item > 0 ? (item * 100) / maxYAxisValue : 0
     );
 
-    setState((draft) => {
-      draft.stepX = stepX;
-      draft.stepY = stepY;
-      draft.horizontalLines = horizontalLines;
-      draft.chartValueArray = values;
-    });
+    const axisHStep = state.maxValue / 6;
+    for (let i = 0; i <= 6; i++) {
+      horizontalLines.push(axisHStep * i);
+    }
+
+    setState((prev) => ({
+      ...prev,
+      stepX,
+      stepY,
+      horizontalLines,
+      chartValueArray: values,
+    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [valueArray, maxXAxisValue, maxYAxisValue]);
+  }, [valueArray, maxXAxisValue, maxYAxisValue, width, height]);
 
   useEffect(() => {
     makeLineChart();
@@ -97,9 +93,10 @@ const LineChart = (props: LineChartProps) => {
 
   useEffect(() => {
     setPathLength(0);
-    setTimeout(() => {
-      setPathLength(pathRef.current?.getTotalLength() || 0);
-    }, 0);
+    if (pathRef.current) {
+      const totalLength = pathRef.current.getTotalLength();
+      setPathLength(totalLength);
+    }
   }, [valueArray, maxXAxisValue, maxYAxisValue]);
 
   const getPosition = (itemval: number, itemindex: number) => {
@@ -108,40 +105,25 @@ const LineChart = (props: LineChartProps) => {
     return { x, y };
   };
 
-  const makeChartPath = () => {
-    let path = "";
-    state.chartValueArray.forEach((number, index) => {
-      const valueItem =
-        number + 6 > state.maxValue ? state.maxValue : number + 6;
-      const x = index * state.stepX + paddingLeft;
-      const y = -((valueItem - state.minValue) * state.stepY);
-      path += index === 0 ? `M${paddingLeft},${y}` : ` L${x},${y}`;
-    });
-    return path;
+  const getChartPath = () => {
+    return state.chartValueArray.reduce((path, number, index) => {
+      const { x, y } = getPosition(Math.min(number, state.maxValue), index);
+      return path + (index === 0 ? `M${paddingLeft},${y}` : ` L${x},${y}`);
+    }, "");
   };
 
-  const makeChartPolygon = () => {
+  const getChartPolygon = () => {
     const start = -(state.minValue * -1 * state.stepY);
     let path = `${paddingLeft},${start}`;
 
     state.chartValueArray.forEach((number: number, index: number) => {
-      const valueItem =
-        number + 6 > state.maxValue ? state.maxValue : number + 6;
-
-      const x = index * state.stepX + paddingLeft;
-      const y = -((valueItem - state.minValue) * state.stepY);
-      const drawY = y < 6 ? y - 6 : y;
-
-      if (index === 0) {
-        path += ` ${paddingLeft},${y}`;
-      } else {
-        path += ` ${x},${y}`;
-      }
+      const { x, y } = getPosition(Math.min(number, state.maxValue), index);
+      path += index === 0 ? ` ${paddingLeft},${y}` : ` ${x},${y}`;
 
       if (index === state.chartValueArray.length - 1) {
         path += ` ${
           (state.chartValueArray.length - 1) * state.stepX + paddingLeft + 2
-        },${drawY}`;
+        },${y}`;
       }
     });
 
@@ -153,19 +135,19 @@ const LineChart = (props: LineChartProps) => {
     return path;
   };
 
-  const renderLineAndPolygon = () => (
+  const renderChartData = () => (
     <g>
       <animated.path
         ref={pathRef}
-        d={makeChartPath()}
+        d={getChartPath()}
         fill="none"
         stroke={DEFAULT_STROKE_COLOR}
-        strokeWidth={1.5}
+        strokeWidth={2}
         strokeDasharray={pathLength}
         strokeDashoffset={length.to([0, 1], [pathLength, 0])}
       />
       <animated.polygon
-        points={makeChartPolygon()}
+        points={getChartPolygon()}
         fill={DEFAULT_FILL_COLOR}
         style={{
           opacity: length,
@@ -174,12 +156,12 @@ const LineChart = (props: LineChartProps) => {
     </g>
   );
 
-  const renderChartCircle = () => (
+  const renderChartPoint = () => (
     <>
       {state.chartValueArray.map((item, index) => {
         if (item === -1) return null;
         const position = getPosition(
-          item + 6 > state.maxValue ? state.maxValue : item + 6,
+          item > state.maxValue ? state.maxValue : item,
           index
         );
         return (
@@ -187,21 +169,19 @@ const LineChart = (props: LineChartProps) => {
             key={index}
             cx={position.x}
             cy={position.y}
-            r={4}
-            stroke={
+            r={6}
+            fill={
               item >= state.maxValue
                 ? DEFAULT_MAX_VALUE_COLOR
                 : DEFAULT_STROKE_COLOR
             }
-            strokeWidth={2}
-            fill={"#fff"}
           />
         );
       })}
     </>
   );
 
-  const renderAxisHorizontalLine = () => (
+  const renderHorizontalLine = () => (
     <>
       {state.horizontalLines.map((item, index) => (
         <line
@@ -217,7 +197,7 @@ const LineChart = (props: LineChartProps) => {
     </>
   );
 
-  const renderAxisVerticalLine = () => {
+  const renderVerticalLine = () => {
     const y = -((state.maxValue - state.minValue) * state.stepY);
     return (
       <>
@@ -240,10 +220,10 @@ const LineChart = (props: LineChartProps) => {
     <div>
       <svg width={width} height={height}>
         <g transform={`translate(0, ${height})`}>
-          {renderAxisHorizontalLine()}
-          {renderAxisVerticalLine()}
-          {renderLineAndPolygon()}
-          {renderChartCircle()}
+          {renderHorizontalLine()}
+          {renderVerticalLine()}
+          {renderChartData()}
+          {renderChartPoint()}
         </g>
       </svg>
     </div>
