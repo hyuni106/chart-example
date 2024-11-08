@@ -188,7 +188,7 @@ const LineChart = (props: LineChartProps) => {
           key={index}
           x1={0}
           y1={-((item - state.minValue) * state.stepY)}
-          x2={7 * state.stepX}
+          x2={maxXAxisValue * state.stepX}
           y2={-((item - state.minValue) * state.stepY)}
           stroke={"#f2f2f2"}
           strokeWidth={1}
